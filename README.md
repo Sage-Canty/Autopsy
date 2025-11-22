@@ -123,3 +123,6 @@ pytest tests/ -v --cov=src --cov-report=term-missing
 ## Why this exists
 
 Every team doing incident response writes RCAs manually — digging through logs, reconstructing timelines, correlating deploys. It's slow, tedious, and happens when you're already exhausted from the incident itself. This tool does the first draft so engineers can focus on validating and improving it instead of building it from scratch at 3am.
+## Related
+
+The runbooks and postmortem templates that informed this tool live in [Platform-Runbooks](https://github.com/Sage-Canty/Platform-Runbooks) — severity levels, escalation paths, and triage steps for AWS/ECS incidents.
