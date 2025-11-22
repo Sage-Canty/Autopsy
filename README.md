@@ -1,4 +1,4 @@
-# postmortem-pilot
+# autopsy
 
 AI-powered RCA generator for AWS incidents. Feed it a CloudWatch log group, a time window, and the alert that fired — it pulls the logs, correlates recent GitHub Actions deploys, and drafts a structured postmortem using Claude.
 
@@ -48,8 +48,8 @@ but used the wrong config key.
 ## Setup
 
 ```bash
-git clone https://github.com/Sage-Canty/postmortem-pilot
-cd postmortem-pilot
+git clone https://github.com/Sage-Canty/autopsy
+cd autopsy
 pip install -r requirements.txt
 ```
 
