@@ -1,0 +1,73 @@
+name: Auto RCA on Deploy Failure
+
+on:
+  workflow_run:
+    workflows: ["*"]  # triggers on any workflow failure
+    types:
+      - completed
+
+jobs:
+  generate-rca:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout autopsy
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Set incident window
+        id: window
+        run: |
+          # Use workflow run timestamps as the incident window
+          START=$(date -u -d "${{ github.event.workflow_run.run_started_at }}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || \
+                  date -u -jf "%Y-%m-%dT%H:%M:%SZ" "${{ github.event.workflow_run.run_started_at }}" +"%Y-%m-%dT%H:%M:%S")
+          END=$(date -u +"%Y-%m-%dT%H:%M:%S")
+          echo "start=$START" >> $GITHUB_OUTPUT
+          echo "end=$END" >> $GITHUB_OUTPUT
+
+      - name: Generate RCA
+        id: rca
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
+        run: |
+          python src/main.py \
+            --log-group "${{ secrets.LOG_GROUP || '/aws/ecs/app' }}" \
+            --start-time "${{ steps.window.outputs.start }}" \
+            --end-time "${{ steps.window.outputs.end }}" \
+            --alert "Deploy failure: ${{ github.event.workflow_run.name }} (#${{ github.event.workflow_run.run_number }})" \
+            --repo "${{ github.event.workflow_run.repository.full_name }}" \
+            --output rca_output.md
+
+      - name: Post RCA to job summary
+        if: always()
+        run: |
+          echo "## 🔍 autopsy — Auto-generated RCA" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** \`${{ github.event.workflow_run.name }}\` run #${{ github.event.workflow_run.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Failed at:** ${{ github.event.workflow_run.run_started_at }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat rca_output.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload RCA as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rca-${{ github.event.workflow_run.run_number }}
+          path: rca_output.md
+          retention-days: 30
